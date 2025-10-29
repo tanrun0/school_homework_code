@@ -10,6 +10,9 @@
 \usepackage{tabularx}
 \usepackage{booktabs}
 \usepackage{hyperref}
+\usepackage{forest}
+\usepackage{float}
+
 
 % --- 页面布局 ---
 \geometry{a4paper, left=2cm, right=2cm, top=2.5cm, bottom=2.5cm, columnsep=1cm}
@@ -92,7 +95,8 @@
 \author{
     姓名: \textcolor{red}{谭润} \\
     学号: \textcolor{red}{20238131027} \\
-    班级: \textcolor{red}{大数据二班}
+    班级: \textcolor{red}{大数据二班} \\
+    项目代码：\href{https://github.com/tanrun0/school_homework_code/tree/main/compiler/shiyan2}{Github链接}
 }
 \date{\today}
 
@@ -104,17 +108,17 @@
 
 \begin{abstract}
 \noindent
-本文档详细记录了基于 Flex 工具实现 COOL（Classroom Object-Oriented Language）词法分析器的设计与开发过程。报告首先深入阐释 Flex 的核心原理，包括通过正则表达式构建 NFA、经子集构造法转化为 DFA 并最小化的自动机生成流程，以及最长匹配、规则优先级的模式匹配机制，还有状态机在字符串、嵌套注释等复杂场景的应用；其次结合代码实现，详解关键字大小写不敏感匹配、标识符分类识别、字符串转义与长度限制、嵌套注释解析及错误检测等功能的实现逻辑；最后通过多维度测试（基础功能、字符串注释、错误处理及集成测试），验证了词法分析器对 COOL 源代码的正确 Token 化能力，以及与编译器后续阶段的协同效果，完整呈现从词法规则定义到可执行分析器的全流程。
+本实验基于 Flex 工具实现了 COOL语言词法分析器的设计与开发过程。首先深入阐释了 Flex 的核心原理，包括通过正则表达式构建 NFA、经子集构造法转化为 DFA 并最小化的自动机生成流程，以及最长匹配、规则优先级的模式匹配机制，还有状态机在字符串、嵌套注释等复杂场景的应用；其次结合代码实现，详解关键字大小写不敏感匹配、标识符分类识别、字符串转义与长度限制、嵌套注释解析及错误检测等功能的实现逻辑；最后通过多维度测试（基础功能、字符串注释、错误处理及集成测试），验证了词法分析器对 COOL 源代码的正确 Token 化能力，以及与编译器后续阶段的协同效果，完整呈现从词法规则定义到可执行分析器的全流程。
 \end{abstract}
 
 \section{项目概述与环境}
 \subsection{项目目标}
-本次实验以编译器原理为核心背景，目标是基于 Flex 词法分析器生成工具，为 COOL（Classroom Object-Oriented Language）设计并实现一款功能完备的词法分析器。该分析器需精准识别 COOL 语言的全部词法单元（含大小写不敏感的关键字、分类区分的标识符、各类常量及多字符操作符），支持单行与嵌套多行注释的正确解析，同时具备完善的错误处理能力（可检测未闭合字符串、字符串过长、非法字符等问题并标注行号），最终生成符合规范的 Token 序列，确保能与编译器后续的语法分析、语义分析阶段顺畅协作，通过集成测试验证其在完整编译流程中的可用性与正确性。
+本实验基于 Flex 词法分析器，为 COOL语言设计并实现了一款功能完备的词法分析器。该分析器能精准识别 COOL 语言的词法单元（含大小写不敏感的关键字、分类区分的标识符、各类常量及多字符操作符），支持单行与嵌套多行注释的正确解析，同时具备完善的错误处理能力（可检测未闭合字符串、字符串过长、非法字符等问题并标注行号），最终生成符合规范的 Token 序列，确保能与编译器后续的语法分析、语义分析阶段顺畅协作，通过多项测试验证了设计的词法分析器的可用性与正确性。
 \subsection{开发环境}
 
 \subsubsection{硬件配置(云服务器信息)}
 \begin{itemize}
-    \item \textbf{CPU}: \textcolor{red}{x86_64架构，2核}
+    \item \textbf{CPU}: \textcolor{red}{x86\_64架构，2核}
     \item \textbf{内存}: \textcolor{red}{总容量2.0Gi}
     \item \textbf{硬盘}: \textcolor{red}{根分区容量总计约 11G（文件系统为 ext4）}
 \end{itemize}
@@ -134,108 +138,105 @@
 \subsubsection{项目目录结构}
 \begin{verbatim}
 ~/code/School/school_homework_code/compiler/shiyan2
-├── a.out
-├── cgen -> /usr/class/bin/cgen
-├── coolc
-├── cool.flex
-├── cool-lex.cc
-├── hello.cl
-├── lexer
-├── makefile
-├── parser -> /usr/class/bin/parser
-├── report
-├── semant -> /usr/class/bin/semant
-├── test_basic.cl
-├── test_error.cl
-└── test_string.cl            
+|-- a.out
+|-- cgen -> /usr/class/bin/cgen
+|-- coolc/
+|-- cool.flex
+|-- cool-lex.cc
+|-- hello.cl
+|-- lexer
+|-- makefile
+|-- parser -> /usr/class/bin/parser
+|-- report/
+|-- semant -> /usr/class/bin/semant
+|-- test_basic.cl
+|-- test_error.cl
+|-- test_string.cl            
 \end{verbatim}
 
 \subsubsection{环境配置过程}
-
-\textcolor{red}{
-安装各种依赖包：
 \begin{verbatim}
+安装各种依赖包：
 sudo dpkg --add-architecture i386 
 sudo apt update 
 sudo apt install libc6:i386 
 sudo apt install lib32z1 
 sudo apt install zlib1g:i386 
 sudo apt install libncurses5:i386
-\end{verbatim}
-
 安装各种工具：
-\begin{verbatim}
 sudo apt install flex
 sudo apt install spim
-\end{verbatim}
-
 安装 coolc 编译器:
-\begin{verbatim}
 git clone https://github.com/aweinert/coolc.git
 sudo apt install openjdk-11-jdk
 sudo apt install maven
-\end{verbatim}
-
 环境变量持久性设置:
-\begin{verbatim}
 vim ~/.bashrc
 \end{verbatim}
-}
+
 % 插入环境变量配置截图
-\begin{figure}[htbp]
+\begin{figure}[H]
     \centering
-    \includegraphics[width=0.9\textwidth]{env.png}
+    \includegraphics[width=0.5\textwidth]{env.png}
     \caption{环境变量配置内容}
     \label{fig:env_config}
 \end{figure}
 
 \section{Flex词法分析器原理}
-
 \subsection{Flex工作流程}
-Flex从.flex文件到可执行词法分析器的完整流程:
-\begin{figure}[htbp]
+Flex 从 \texttt{.flex} 文件到可执行词法分析器的完整流程如下：
+\begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\textwidth]{Flex_work.png}
+    \includegraphics[width=\linewidth]{Flex_work.png}
     \caption{Flex词法分析器工作流程图}
     \label{fig:flex_workflow}
 \end{figure}
-详细步骤说明：
-1.读取.flex文件：Flex读取包含正则表达式规则和动作代码的源文件
-2.规则解析：Flex解析三个部分（定义段、规则段、用户代码段）
-3.自动机生成：
-    a.将正则表达式转换为NFA（非确定有限自动机）
-    b.通过子集构造法将NFA转换为DFA（确定有限自动机）
-    c.对DFA进行最小化优化
-4.代码生成：生成cool-lex.cc文件，包含DFA表和匹配逻辑
-5.编译链接：使用g++编译生成可执行文件lexer
-6.词法分析：lexer读取COOL源代码，输出Token序列
+
+\begin{enumerate}
+    \item 读取 \texttt{.flex} 文件：Flex 读取包含正则表达式规则和动作代码的源文件。
+    \item 规则解析：Flex 解析三个部分（定义段、规则段、用户代码段）。
+    \item 自动机生成：
+        \begin{itemize}
+            \item 将正则表达式转换为 NFA（非确定有限自动机）；
+            \item 通过子集构造法将 NFA 转换为 DFA（确定有限自动机）；
+            \item 对 DFA 进行最小化优化。
+        \end{itemize}
+    \item 代码生成：生成 \texttt{cool-lex.cc} 文件，包含 DFA 表和匹配逻辑。
+    \item 编译链接：使用 \texttt{g++} 编译生成可执行文件 \texttt{lexer}。
+    \item 词法分析：\texttt{lexer} 读取 COOL 源代码，输出 Token 序列。
+\end{enumerate}
 
 \subsection{有限状态自动机（FSA）原理}
 
-FSA基本概念: 有限状态自动机是由状态集合、输入字母表、状态转移函数、初始状态和接受状态组成的数学模型
+FSA基本概念: 有限状态自动机是由状态集合、输入字母表、状态转移函数、初始状态和接受状态组成的数学模型。
 NFA（非确定有限自动机）与 DFA（确定有限自动机）的区别主要体现在：NFA 一个状态对同一输入可有多条转移、允许空串转移、匹配时需回溯效率较低但易于从正则表达式构建；而 DFA 每个状态对每个输入只有唯一转移、不允许空串转移、无回溯匹配效率高且需通过 NFA 转换得到。
 
-\begin{figure}[htbp]
+\begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\textwidth]{Flex_auto_create.png}
+    \includegraphics[width=\linewidth]{Flex_auto_create.png}
     \caption{Flex的自动机构建过程}
     \label{fig:flex_workflow}
 \end{figure}
 
-示例: 识别整数 "[0-9]+" 的自动机
-\begin{figure}[htbp]
+\noindent \textbf{示例：识别整数"[0-9]+"的自动机}
+\begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\textwidth]{example1.jpg}
+    \includegraphics[width=\linewidth]{example1.jpg}
     \caption{识别整数[0-9]+的自动机图示}
     \label{fig:example1}
 \end{figure}
-转换过程说明：
-1.NFA构建：使用Thompson算法从正则表达式构建NFA
-2.子集构造：将NFA状态集合作为DFA的单个状态
-3.DFA最小化：合并等价状态，减少状态数量
-为什么DFA效率更高：
-1.DFA在匹配时不需要回溯，每个输入字符只需一次状态转移
-2.NFA可能需要尝试多条路径，存在回溯开销
+\paragraph{转换过程说明}
+\begin{enumerate}
+    \item NFA 构建：使用 Thompson 算法从正则表达式构建 NFA。
+    \item 子集构造：将 NFA 状态集合作为 DFA 的单个状态。
+    \item DFA 最小化：合并等价状态，减少状态数量。
+\end{enumerate}
+
+\paragraph{为什么 DFA 效率更高}
+\begin{enumerate}
+    \item DFA 在匹配时不需要回溯，每个输入字符只需一次状态转移。
+    \item NFA 可能需要尝试多条路径，存在回溯开销。
+\end{enumerate}
 
 \subsection{模式匹配机制}
 
@@ -315,7 +316,7 @@ Flex的状态机制允许词法分析器在不同的上下文中使用不同的�
 \subsubsection{字符串处理状态转换图}
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.9\textwidth]{status_change.png}
+    \includegraphics[width=\linewidth]{status_change.png}
     \caption{字符串处理状态转换图}
     \label{fig:status_change}
 \end{figure}
@@ -356,58 +357,80 @@ Flex的状态机制允许词法分析器在不同的上下文中使用不同的�
 \subsubsection{为什么需要状态机制}
 \begin{itemize}
     \item \textbf{上下文相关处理}：字符串内的空格和注释内的关键字不应被正常解析
-    \item \textbf{嵌套结构}：注释可以嵌套\texttt{(* outer (* inner *) outer *)}
+    \item \textbf{嵌套结构}：注释可以嵌套"(* outer (* inner *) outer *)"
     \item \textbf{复杂词法结构}：字符串转义、多行注释等需要特殊处理
 \end{itemize}
 
 
 \section{实现细节}
-本节简要说明词法规则的实现思路。完整代码见附录。
+本节简要说明词法规则的实现思路，完整代码见附录。
 
 \subsection{关键字与标识符}
 
-\textbf{基本要求：}
+\subsubsection{基本要求}
 \begin{itemize}
-    \item 关键字（如class、if、while等）是大小写不敏感的
-    \item 布尔常量true和false的首字母必须小写
+    \item 关键字（如class、if、while等）大小写不敏感
+    \item 布尔常量true和false首字母必须小写
     \item TYPE\_ID以大写字母开头，OBJECT\_ID以小写字母开头
     \item 整数常量为数字序列
 \end{itemize}
 
-% 基于附录代码的实现说明
-关键字大小写不敏感通过字符类组合实现，例如匹配`class`时使用`[cC][lL][aA][sS][sS]`，每个字母同时匹配大小写形式，确保输入`Class`“CLASS”等都能识别为CLASS关键字；布尔常量`true`和`false`通过固定正则`[tT][rR][uU][eE]`和`[fF][aA][lL][sS][eE]`匹配，同时在动作中给`kulouyylval.boolean`赋值1或0，保证语义正确。
+\subsubsection{具体实现}
+\begin{enumerate}
+    \item \textbf{关键字大小写兼容}：
+      通过字符类组合实现，例如匹配"class"时使用"[cC][lL][aA][sS][sS]"，每个字母同时匹配大小写形式，确保"Class""CLASS"等输入均能识别为CLASS关键字。
 
-两种标识符通过正则前缀区分：TYPE\_ID使用`{DAXIEZIMU}{ZIMUSHIZI}*`（大写字母开头，后接字母、数字或下划线），匹配后返回TYPEID；OBJECT\_ID使用`{XIAOXIEZIMU}{ZIMUSHIZI}*`（小写字母开头），匹配后返回OBJECTID。
+    \item \textbf{布尔常量处理}：
+      通过固定正则"[tT][rR][uU][eE]"和"[fF][aA][lL][sS][eE]"匹配，动作中给"kulouyylval.boolean"赋值1或0，保证语义正确。
 
-关键字与标识符的优先级通过规则顺序保证：所有关键字规则（如CLASS、IF等）均定义在标识符规则之前，遵循Flex“先定义规则优先”原则，避免标识符规则优先匹配关键字（如“class”不会被识别为OBJECTID）。
+    \item \textbf{标识符区分}：
+      TYPE\_ID：正则"{DAXIEZIMU}{ZIMUSHIZI}*"（大写字母开头，后接字母、数字或下划线），匹配后返回TYPEID。OBJECT\_ID：正则"{XIAOXIEZIMU}{ZIMUSHIZI}*"（小写字母开头），匹配后返回OBJECTID。
+
+    \item \textbf{优先级保证}：
+      所有关键字规则（如CLASS、IF等）定义在标识符规则之前，遵循Flex"先定义规则优先"原则，避免标识符规则错误匹配关键字（如"class"不会被识别为OBJECTID）。
+\end{enumerate}
 
 \subsection{字符串处理}
 
-\textbf{基本要求：}
+\subsubsection{基本要求}
 \begin{itemize}
     \item 字符串以双引号开始和结束，不能跨行
-    \item 支持转义字符：\texttt{\textbackslash n}, \texttt{\textbackslash t}, \texttt{\textbackslash b}, \texttt{\textbackslash f}, \texttt{\textbackslash"}, \texttt{\textbackslash\textbackslash}
+    \item 支持转义字符：\texttt{\textbackslash n}, \texttt{\textbackslash t}, \texttt{\textbackslash b}, \texttt{\textbackslash f}, \texttt{\textbackslash "}, \texttt{\textbackslash\textbackslash}
     \item 最大长度1024字符，不能包含空字符
     \item 需要使用Flex状态机（\texttt{\%x STRING}）处理
 \end{itemize}
 
-% 基于附录代码的状态机设计说明
-字符串处理通过独占状态`ZIFUCHUAN`（\`\%x ZIFUCHUAN`）实现，状态转换与逻辑如下：
-1. **状态进入与退出**：初始状态（INITIAL）下匹配双引号`"`时，通过`BEGIN(ZIFUCHUAN)`切换到字符串状态，并初始化`zifuchuanhuanchongquzhizhen`（字符串缓冲区指针）指向缓冲区起始地址；在字符串状态下匹配双引号时，给缓冲区添加终止符`\0`，通过`strdup`复制缓冲区内容到`kulouyylval.symbol`，再用`BEGIN(INITIAL)`返回初始状态，同时返回STR_CONST。
+\subsubsection{实现逻辑}
+字符串处理通过独占状态"ZIFUCHUAN"（\texttt{\%x ZIFUCHUAN}）实现，核心流程如下：
 
-2. **转义字符处理**：在`ZIFUCHUAN`状态下，针对不同转义序列单独匹配：`\\n`替换为`\n`、`\\t`替换为`\t`、`\\b`替换为`\b`、`\\f`替换为`\f`、`\\"`替换为`"`、`\\\\`替换为`\`，每个匹配项均将转义后的字符写入缓冲区。
+\begin{enumerate}
+    \item \textbf{状态切换与缓冲区管理}：
+      初始状态（INITIAL）下匹配双引号"\""时，通过"BEGIN(ZIFUCHUAN)"切换到字符串状态，并初始化字符串缓冲区指针指向预设的1024字节缓冲区的起始地址；在字符串状态下匹配双引号时，给缓冲区添加终止符"\0"，通过"strdup"复制缓冲区内容到"kulouyylval.symbol"，再用"BEGIN(INITIAL)"返回初始状态，同时返回STR\_CONST。
 
-3. **错误检测与报告**：
-   - 未闭合字符串：`ZIFUCHUAN`状态下匹配`\n`（换行），更新行号后设置`error_msg`为“Unterminated string constant”，返回初始状态并返回ERROR；
-   - 字符串过长：通过计算`zifuchuanhuanchongquzhizhen - zifuchuanhuanchongqu`（当前缓冲区长度），若超过`ZUIDAZIFUCHUANCHANGDU - 1`（1023），设置`error_msg`为“String constant too long”，返回ERROR；
-   - EOF在字符串中：`ZIFUCHUAN`状态下匹配`<EOF>`，设置`error_msg`为“EOF in string constant”，返回ERROR；
-   - 空字符：代码中通过默认匹配规则（`.`）处理，空字符会被正常写入缓冲区，后续可结合语义分析进一步过滤（当前词法层已保证基础长度与闭合性检查）。
+    \item \textbf{转义字符解析}：
+      在"ZIFUCHUAN"状态下，对转义序列单独匹配并转换：
+      \begin{itemize}
+          \item "\textbackslash n" 替换为"\n"
+          \item "\textbackslash t" 替换为"\t"
+          \item "\textbackslash b" 替换为"\b"
+          \item "\textbackslash f" 替换为"\f"
+          \item "\textbackslash "" 替换为"\""
+          \item "\textbackslash\textbackslash" 替换为"\textbackslash"
+      \end{itemize}
+      每个匹配项均将转义后的字符写入缓冲区，确保特殊字符解析正确。
 
-4. **缓冲区使用**：定义固定大小数组`zifuchuanhuanchongqu[ZUIDAZIFUCHUANCHANGDU]`（1024字节）作为缓冲区，`zifuchuanhuanchongquzhizhen`作为移动指针，每匹配一个有效字符（含转义后字符）就写入缓冲区并移动指针，确保字符串内容完整存储。
+    \item \textbf{错误检测与处理}：
+      \begin{itemize}
+          \item 未闭合字符串："ZIFUCHUAN"状态下匹配"\n"（换行），更新行号后设置"error\_msg"为"Unterminated string constant"，返回ERROR并切换回初始状态；
+          \item 字符串过长：若"字符串缓冲区指针 - 字符串缓冲区 >= 最大字符串长度 - 1"，设置"error\_msg"为"String constant too long"，返回ERROR；
+          \item EOF在字符串中："ZIFUCHUAN"状态下匹配"<EOF>"，设置"error\_msg"为"EOF in string constant"，返回ERROR；
+      \end{itemize}
+\end{enumerate}
+
 
 \subsection{操作符与注释}
 
-\textbf{基本要求：}
+\subsubsection{基本要求}
 \begin{itemize}
     \item 多字符操作符：\texttt{<-}、\texttt{<=}、\texttt{=>}
     \item 单行注释：\texttt{--}到行尾
@@ -415,23 +438,29 @@ Flex的状态机制允许词法分析器在不同的上下文中使用不同的�
     \item 忽略空白字符，换行时更新行号
 \end{itemize}
 
-% 基于附录代码的实现说明
-1. **多字符与单字符操作符优先级**：多字符操作符规则定义在单字符操作符之前，遵循Flex“最长匹配”原则。例如`<-`（ASSIGN）、`<=`（LE）、`=>`（DARROW）均单独定义规则，优先于`-`、`<`、`=`等单字符操作符匹配，避免“<-”被拆分为`<`和`-`。
+\subsubsection{实现逻辑}
+\begin{enumerate}
+    \item \textbf{操作符优先级}：
+      多字符操作符规则（如"<-"、"<="、"=>"）定义在单字符操作符（如"-"、"<"、"="）之前，遵循Flex"最长匹配"原则，避免多字符操作符被拆分。
 
-2. **嵌套注释实现**：通过独占状态`ZHUSHI`（\`\%x ZHUSHI`）和嵌套计数器`zhushiqiancengshu`实现：
-   - 初始状态匹配`(*`时，切换到`ZHUSHI`状态，计数器设为1；
-   - `ZHUSHI`状态下再次匹配`(*`，计数器加1（嵌套加深）；
-   - 匹配`*)`时，计数器减1，若计数器变为0则切换回初始状态（注释结束）；
-   - 若`ZHUSHI`状态下匹配`<EOF>`，设置`error_msg`为“EOF in comment”，返回ERROR。
-   单行注释通过`"--".*`匹配（`--`后接任意字符到行尾），匹配后无动作直接忽略内容。
+    \item \textbf{嵌套注释处理}：
+      通过独占状态"ZHUSHI"（\texttt{\%x ZHUSHI}）和嵌套计数器"zhushiqiancengshu"实现：
+      \begin{itemize}
+          \item 初始状态匹配"(*"时，切换到"ZHUSHI"状态，计数器设为1；
+          \item "ZHUSHI"状态下再次匹配"(*"，计数器加1；
+          \item 匹配"*)"时，计数器减1，若计数器为0则切换回初始状态；
+          \item "ZHUSHI"状态下匹配"<EOF>"，设置"error\_msg"为"EOF in comment"，返回ERROR；
+      \end{itemize}
+      单行注释通过"--".*匹配并直接忽略内容。
 
-3. **行号更新**：单独定义`\n`（换行）规则，每次匹配到换行符时，`dangqianhanghao`（当前行号）加1；同时在`ZHUSHI`状态下也单独处理`\n`，确保注释中的换行也能正确更新行号，保证错误信息的行号准确性。
+    \item \textbf{行号与空白处理}：
+      单独定义\texttt{\textbackslash n}规则，每次匹配换行符时当前行号加1；空白字符（空格、制表符等）通过\texttt{[ \textbackslash f\textbackslash r\textbackslash t\textbackslash v]+}规则匹配后忽略。
+\end{enumerate}
 
-此外，空白字符（空格、制表符等）通过`[ \f\r\t\v]+`规则匹配后无动作，实现自动忽略。
 
 \subsection{错误处理}
 
-\textbf{需要检测的错误：}
+\subsubsection{需要检测的错误}
 \begin{itemize}
     \item 未闭合的字符串、字符串过长、字符串中的空字符
     \item EOF在字符串或注释中
@@ -439,19 +468,17 @@ Flex的状态机制允许词法分析器在不同的上下文中使用不同的�
     \item 源代码中的非法字符
 \end{itemize}
 
-% 基于附录代码的错误处理说明
-所有错误均通过设置`kulouyylval.error_msg`存储错误信息，匹配后返回ERROR，同时在`dayintoken`函数中打印行号与错误内容，具体处理逻辑如下：
-- 未闭合字符串/EOF在字符串：`ZIFUCHUAN`状态下匹配`\n`或`<EOF>`，分别设置对应`error_msg`；
-- 字符串过长：`ZIFUCHUAN`状态下检查缓冲区长度，超过限制时设置“String constant too long”；
-- EOF在注释：`ZHUSHI`状态下匹配`<EOF>`，设置“EOF in comment”；
-- 未匹配`*)`：初始状态下单独匹配`*)`，设置“Unmatched *)”；
-- 非法字符：通过最后的`.`（任意字符）规则匹配，将`yytext`（非法字符）复制到`error_msg`，捕获所有未定义的字符（如`#`、`@`等非COOL合法字符）。
-
-错误恢复机制：所有错误场景在返回ERROR前，均通过`BEGIN(INITIAL)`切换回初始状态，确保后续输入仍能被正常解析（如未闭合字符串报错后，后续代码仍可继续词法分析）。
-
+\subsubsection{实现逻辑}
+所有错误通过设置"kulouyylval.error\_msg"存储信息，匹配后返回ERROR，具体处理如下：
+\begin{enumerate}
+    \item 字符串相关错误：未闭合字符串、字符串过长、EOF在字符串，逻辑同"字符串处理"小节；
+    \item 注释相关错误：EOF在注释、未匹配"*)"（初始状态下匹配"*)"时设置"Unmatched *)"）；
+    \item 非法字符：通过最后的"."规则匹配，将"yytext"（非法字符）复制到"error\_msg"；
+    \item 错误恢复：所有错误场景返回前均通过"BEGIN(INITIAL)"切换回初始状态，确保后续输入可正常解析。
+\end{enumerate}
 
 \section{测试与验证}
-为了验证词法分析器的正确性，基于附录代码设计4组测试用例，通过`./lexer 测试文件.cl`命令执行，验证核心功能与错误处理能力。
+为了验证词法分析器的正确性，基于附录代码设计4组测试用例，通过"./lexer 测试文件.cl"命令执行，验证核心功能与错误处理能力。
 
 \subsection{基础功能测试}
 
@@ -474,17 +501,17 @@ $ ./lexer test_basic.cl
 \textbf{实际输出结果：}
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.95\linewidth]{test_basic_output.png}  % 图片宽度适配双栏布局
-    \caption{test_basic.cl 测试输出截图}  % 图片标题，说明图片内容
+    \includegraphics[width=\linewidth]{test_basic_output.png}  % 图片宽度适配双栏布局
+    \caption{test\_basic.cl 测试输出截图}  % 图片标题，说明图片内容
 \end{figure}
 
-\textbf{测试结论}：所有关键字（class、Int、Bool）、标识符（Main（TYPEID）、x（OBJECTID））、常量（42（INT_CONST）、true（BOOL_CONST））、操作符（<-（ASSIGN）、:、;等）均被正确识别，行号与语法结构匹配，基础功能正常。
+\textbf{测试结论}：所有关键字（class、Int、Bool）、标识符（Main（TYPEID）、x（OBJECTID））、常量（42（INT\_CONST）、true（BOOL\_CONST））、操作符（<-（ASSIGN）、:、;等）均被正确识别，行号与语法结构匹配，基础功能正常。
 
 \subsection{字符串与注释测试}
 
 测试目标：验证字符串转义字符、嵌套注释的正确处理。
 
-\textbf{测试用例}（test\_string_comment.cl）：
+\textbf{测试用例}（test\_string\_comment.cl）：
 \begin{lstlisting}[language=cool, caption={字符串与注释测试}]
 (* 测试注释和嵌套 (* 注释 *) *)
 class Test {
@@ -504,19 +531,22 @@ $ ./lexer test_string_comment.cl
 \textbf{实际输出结果：}
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.95\linewidth]{test_string_comment.png}  % 图片宽度适配双栏布局
-    \caption{test_string_comment.cl 测试输出截图}  % 图片标题，说明图片内容
+    \includegraphics[width=\linewidth]{test_string_comment.png}  % 图片宽度适配双栏布局
+    \caption{test\_string\_comment.cl 测试输出截图}  % 图片标题，说明图片内容
 \end{figure}
 
 \textbf{测试结论}：
-1. 嵌套注释（`(* 测试注释和嵌套 (* 注释 *) *)`）和单行注释（`-- 单行注释`）均被正确忽略，无多余Token输出；
-2. 字符串转义字符正常处理：`"Hello\nWorld"`解析为含换行的STR_CONST、`"Quote\"Test\""`解析为含双引号的STR_CONST、`"Tab\tTest"`解析为含制表符的STR_CONST，转义逻辑正确。
+\begin{enumerate}
+    \item 嵌套注释（\verb|"(* 测试注释和嵌套 (* 注释 *) *)"|）和单行注释（\verb|"-- 单行注释"|）均被正确忽略，无多余Token输出；
+    
+    \item 字符串转义字符正常处理：\verb|"Hello\nWorld"|解析为含换行的\texttt{STR\_CONST}、\verb|"Quote\"Test\""|解析为含双引号的\texttt{STR\_CONST}、\verb|"Tab\tTest"|解析为含制表符的\texttt{STR\_CONST}，转义逻辑正确。
+\end{enumerate}
 
 \subsection{错误处理测试}
 
 测试目标：验证各类词法错误的检测与报告能力。
 
-\textbf{测试用例}（test_error.cl）：
+\textbf{测试用例}（test\_error.cl）：
 \begin{lstlisting}[language=cool, caption={错误处理测试}]
 class ErrorTest {
     str : String <- "unclosed string;
@@ -532,13 +562,16 @@ $ ./lexer test_error.cl
 \textbf{实际输出结果：}
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.95\linewidth]{test_error.png}  % 图片宽度适配双栏布局
-    \caption{test_error.cl 测试输出截图}  % 图片标题，说明图片内容
+    \includegraphics[width=\linewidth]{test_error.png}  % 图片宽度适配双栏布局
+    \caption{test\_error.cl 测试输出截图}  % 图片标题，说明图片内容
 \end{figure}
 
 \textbf{测试结论}：
-1. 未闭合字符串（`"unclosed string`）被正确检测，行号2输出“ERROR "Unterminated string constant"”；
-2. 错误检测后自动返回初始状态，符合错误恢复逻辑；若删除未闭合字符串，`*)`会被检测为“ERROR "Unmatched *)"”，非法字符`*`会被捕获，错误处理功能完整。
+\begin{enumerate}
+    \item 未闭合字符串（\verb|"unclosed string|）被正确检测，行号2输出\verb|"ERROR "Unterminated string constant""|；
+    
+    \item 错误检测后自动返回初始状态，符合错误恢复逻辑；若删除未闭合字符串，\verb|"*)"|会被检测为\verb|"ERROR "Unmatched *)""|，非法字符\verb|"@"|会被捕获，错误处理功能完整。
+\end{enumerate}
 
 \subsection{集成测试}
 
@@ -555,11 +588,15 @@ class Main inherits IO {
 \end{lstlisting}
 
 \textbf{编译与运行流程：}
-1. 生成词法分析器：`flex cool.flex`生成`cool-lex.cc`，`g++ cool-lex.cc -o lexer`编译为可执行文件；
-2. 编译器集成：将`lexer`与`parser`（语法分析）、`semant`（语义分析）、`cgen`（代码生成）组件整合，通过`make`生成完整编译器`mycoolc`；
-3. 编译COOL程序：`./mycoolc hello.cl`生成MIPS汇编文件`hello.s`；
-4. 运行汇编代码：`spim hello.s`执行汇编程序。
-
+\begin{enumerate}
+    \item 生成词法分析器：\verb|"flex cool.flex"|生成\verb|"cool-lex.cc"|，\verb|"g++ cool-lex.cc -o lexer"|编译为可执行文件；
+    
+    \item 编译器集成：将\verb|"lexer"|与\verb|"parser"|（语法分析）、\verb|"semant"|（语义分析）、\verb|"cgen"|（代码生成）组件整合，通过\verb|"make"|生成完整编译器\verb|"mycoolc"|；
+    
+    \item 编译COOL程序：\verb|"./mycoolc hello.cl"|生成MIPS汇编文件\verb|"hello.s"|；
+    
+    \item 运行汇编代码：\verb|"spim hello.s"|执行汇编程序。
+\end{enumerate}
 \textbf{编译信息（成功输出）：}
 \begin{verbatim}
 $ ./mycoolc hello.cl
@@ -570,26 +607,38 @@ hello.cl  hello.s  lexer  mycoolc  ...
 \textbf{实际输出结果：}
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.95\linewidth]{hello.png}  % 图片宽度适配双栏布局
+    \includegraphics[width=\linewidth]{hello.png}  % 图片宽度适配双栏布局
     \caption{hello.cl 测试输出截图}  % 图片标题，说明图片内容
 \end{figure}
 
-\textbf{测试结论：} 词法分析器生成的Token序列能被后续编译器阶段正确解析，成功生成可执行MIPS汇编代码，运行后输出预期结果“Hello, COOL!”，证明词法分析器与编译器整体流程兼容，功能正确可用。
+\textbf{测试结论：} 词法分析器生成的Token序列能被后续编译器阶段正确解析，成功生成可执行MIPS汇编代码，运行后输出预期结果"Hello, COOL!"，证明词法分析器与编译器整体流程兼容，功能正确可用。
 
 \section{遇到的问题与解决方案}
-遇到的问题：
-1. 环境配置问题：如 flex安装，coolc安装，...
-- 解决方法：查文档，问AI
-2. cool.flex 中，中文注释会报非法字符错误
-- 解决方法：直接删除所有注释
-3. 其他语法编译问题，太多了.....
-- 解决方案：DEBUG，多调，多问，多改
-4. tex编译太难，TeX Live下载流程太恶心，内存还大
-- 解决方案：直接用在线tex编译（或者让AI生成一个一样的PDF）
+\begin{enumerate}
+    \item \textbf{环境配置问题}：如 Flex 安装、coolc 安装等依赖配置复杂
+    \begin{itemize}
+        \item \textbf{解决方案}：查阅官方文档，使用 AI 辅助排查环境问题
+    \end{itemize}
+    
+    \item \textbf{中文注释报错}：cool.flex 中的中文注释会导致非法字符错误
+    \begin{itemize}
+        \item \textbf{解决方案}：删除所有中文注释，使用英文注释或直接移除注释
+    \end{itemize}
+    
+    \item \textbf{语法编译问题}：开发过程中遇到多种词法规则冲突和语法错误
+    \begin{itemize}
+        \item \textbf{解决方案}：通过调试、多次调整规则顺序、查阅资料逐步解决
+    \end{itemize}
+    
+    \item \textbf{TeX 环境配置}：TeX Live 安装包过大，本地编译环境配置复杂
+    \begin{itemize}
+        \item \textbf{解决方案}：使用在线 LaTeX 编辑器（如 Overleaf）避免本地环境问题
+    \end{itemize}
+\end{enumerate}
 
 \section{总结}
 
-通过本次实验，基于Flex工具完成了COOL语言词法分析器的设计与实现，深入理解了Flex的核心工作机制：包括正则表达式到NFA、DFA的转换流程，最长匹配与规则优先级的模式匹配策略，以及独占状态在复杂词法结构（字符串、嵌套注释）中的应用。实现的分析器具备完整功能：能正确识别COOL语言的关键字、标识符、常量、操作符，支持字符串转义与嵌套注释处理，可检测并报告未闭合字符串、非法字符等词法错误；通过多维度测试验证，尤其是集成测试中与编译器后续阶段的顺畅协作，证明分析器满足工程需求，为后续语法分析与代码生成提供了可靠的Token输入。同时，本次实验也提升了基于自动机理论解决实际词法分析问题的能力，为深入理解编译器前端工作原理奠定基础。
+本次实验基于Flex工具完成了COOL语言词法分析器的设计与实现，深入理解了Flex的核心工作机制：包括正则表达式到NFA、DFA的转换流程，最长匹配与规则优先级的模式匹配策略，以及独占状态在复杂词法结构（字符串、嵌套注释）中的应用。实现的分析器具备完整功能：能正确识别COOL语言的关键字、标识符、常量、操作符，支持字符串转义与嵌套注释处理，可检测并报告未闭合字符串、非法字符等词法错误；通过多维度测试验证，尤其是集成测试中与编译器后续阶段的顺畅协作，证明分析器满足工程需求，为后续语法分析与代码生成提供了可靠的Token输入。同时，本次实验也提升了基于自动机理论解决实际词法分析问题的能力，为深入理解编译器前端工作原理奠定基础。
 
 \section{附录: cool.flex 完整源码}
 \begin{lstlisting}[language=Flex, caption={cool.flex 完整源码}, label=code:cool_flex]
